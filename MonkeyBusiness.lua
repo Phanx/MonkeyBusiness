@@ -7,7 +7,7 @@ Monkey:RegisterEvent("PLAYER_REGEN_ENABLED")
 Monkey:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "player")
 Monkey:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")
 Monkey:SetScript("OnEvent", function(self, event, ...)
-	if GetShapeshiftFormID() ~= 23 or not UnitAffectingCombat("player") or not UnitHasVehiclePlayerFrameUI("player") then
+	if GetShapeshiftFormID() ~= 23 or not UnitAffectingCombat("player") or UnitHasVehiclePlayerFrameUI("player") then
 		for i = 1, #self.Business do
 			self.Business[i]:Deactivate()
 		end
@@ -19,6 +19,13 @@ Monkey:SetScript("OnEvent", function(self, event, ...)
 end)
 
 Monkey.Business = {}
+
+function Monkey:Test(state)
+	for i = 1, #self.Business do
+		local socks = self.Business[i]
+		socks[state and "Activate" or "Deactivate"](socks)
+	end
+end
 
 --------------------------------------------------------------------------------
 -- Stagger bar
@@ -122,17 +129,7 @@ local GUARD_ID, GUARD_NAME = 115295, GetSpellInfo(115295)
 
 local Guard = CreateIconButton(GUARD_ID, "Guard")
 Guard:SetPoint("BOTTOM", Stagger, "TOP", 0, 10)
-
 Guard:Hide()
-Guard:SetScript("OnUpdate", function(self, elapsed) -- TEMP
-	if self.state == "ACTIVE" then
-		local t = self.endTime - GetTime()
-		self.Count:SetFormattedText("%.02f", t)
-	elseif self.state == "COOLDOWN" then
-		local t = self.endTime - GetTime()
-		self.Count:SetFormattedText("%.02f", t)
-	end
-end)
 
 function Guard:Activate()
 	self:RegisterUnitEvent("UNIT_AURA", "player")
@@ -157,30 +154,47 @@ function Guard:Update()
 		self.endTime = buffExpires
 		self:SetAlpha(0.25)
 		self.SelectedHighlight:Hide()
+		self:SetScript("OnUpdate", self.OnUpdate)
 	elseif numCharges > 0 and chi >= 2 then
 		self.state = "MISSING"
 		self:SetAlpha(1)
 		self.SelectedHighlight:Show()
 		self.SelectedHighlight:SetVertexColor(1, 0, 0)
+		self:SetScript("OnUpdate", self.OnUpdate)
 	elseif numCharges > 0 then
 		self.state = "RESOURCE"
 		self:SetAlpha(0.5)
 		self.SelectedHighlight:Hide()
+		self:SetScript("OnUpdate", nil)
+		self.Count:Hide()
 	else
 		self.state = "COOLDOWN"
 		self:SetAlpha(0.5)
 		self.endTime = rechargeStarted + rechargeDuration
 		self.SelectedHighlight:Hide()
+		self:SetScript("OnUpdate", nil)
+		self.Count:Hide()
+	end
+end
+
+function Guard:OnUpdate(self, elapsed)
+	if self.state == "ACTIVE" then
+		local t = self.endTime - GetTime()
+		self.Count:SetFormattedText("%.01f", t)
+	elseif self.state == "COOLDOWN" then
+		local t = self.endTime - GetTime()
+		self.Count:SetFormattedText("%.01f", t)
 	end
 end
 
 --------------------------------------------------------------------------------
 -- Tiger Palm reminder icon
+-- Shown if missing
 
 local TIGER_PALM_ID, TIGER_PALM_NAME = 100787, GetSpellInfo(100787)
 
 local TigerPalm = CreateIconButton(TIGER_PALM_ID, "TigerPalm")
-TigerPalm:SetPoint("TOPLEFT", Stagger, "BOTTOMLEFT", 0, -4*1.6)
+TigerPalm:SetPoint("TOPLEFT", Stagger, "BOTTOMLEFT", 0, -10 * (1 / 0.6))
 TigerPalm:SetScale(0.6)
 
 function TigerPalm:Activate()
@@ -196,4 +210,84 @@ end
 function TigerPalm:Update()
 	local _, _, _, _, _, buffDuration, buffExpires = UnitBuff("player", TIGER_PALM_NAME)
 	self:SetShown(buffDuration)
+end
+
+--------------------------------------------------------------------------------
+-- Death Note reminder icon
+-- Shown if usable on current target, glow if resources available
+
+local DEATH_NOTE_ID, DEATH_NOTE_NAME = 121125, GetSpellInfo(121125)
+
+local DeathNote = CreateIconButton(DEATH_NOTE_ID, "DeathNote")
+DeathNote:SetPoint("TOPLEFT", Stagger, "BOTTOMLEFT", 0, -10 * (1 / 0.6))
+DeathNote:SetScale(0.6)
+
+function DeathNote:Activate()
+	self:RegisterUnitEvent("UNIT_AURA", "player")
+	self:RegisterUnitEvent("UNIT_POWER", "player")
+	self:Update()
+end
+
+function DeathNote:Deactivate()
+	self:Hide()
+	self:UnregisterEvent("UNIT_AURA")
+	self:UnregisterEvent("UNIT_POWER")
+end
+
+function DeathNote:Update()
+	local _, _, _, _, _, buffDuration, buffExpires = UnitBuff("player", DEATH_NOTE_NAME)
+	if not buffDuration then
+		self:Hide()
+	else
+		local chi = UnitPower("player", 12) -- SPELL_POWER_CHI
+		self.SelectedHighlight:SetShown(chi >= 2)
+		self:Show()
+		if TigerPalm:IsShown() then
+			self:SetPoint("TOPLEFT", TigerPalm, "TOPRIGHT", -4 * (1 / 0.6), 0)
+		else
+			self:SetPoint("TOPLEFT", Stagger, "BOTTOMLEFT", 0, -10 * (1 / 0.6))
+		end
+	end
+end
+
+--------------------------------------------------------------------------------
+-- Shuffle icon
+-- Red glow if missing, transparent if active, opaque under 10s remaining
+
+local SHUFFLE_ID, SHUFFLE_NAME = 115307, GetSpellInfo(115307)
+
+local Shuffle = CreateIconButton(SHUFFLE_ID, "Shuffle")
+Shuffle:SetPoint("BOTTOMLEFT", Stagger, "TOPLEFT", 0, -4 * (1 / 0.6))
+Shuffle:SetScale(0.6)
+
+function Shuffle:Activate()
+	self:RegisterUnitEvent("UNIT_AURA", "player")
+	self.SelectedHighlight:SetVertexColor(1, 0, 0)
+	self:Show()
+	self:Update()
+end
+
+function Shuffle:Deactivate()
+	self:Hide()
+	self:UnregisterEvent("UNIT_AURA")
+end
+
+function Shuffle:Update()
+	local _, _, _, _, _, buffDuration, buffExpires = UnitBuff("player", SHUFFLE_NAME)
+	if buffDuration and buffDuration < 10 then
+		self.SelectedHighlight:Hide()
+		self.expirationTime = buffExpires
+		self:SetScript("OnUpdate", self.OnUpdate)
+	else
+		self.SelectedHighlight:SetShown(not buffDuration)
+		self:SetScript("OnUpdate", nil)
+		self.Count:SetText("")
+		self.Icon:SetAlpha(buffDuration and 0.25 or 1)
+	end
+end
+
+function Shuffle:OnUpdate(elapsed)
+	local t = self.expirationTime - GetTime()
+	self.Count:SetFormattedText("%.01f", t)
+	self.Icon:SetAlpha(1 - (t / 10))
 end
