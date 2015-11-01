@@ -1,4 +1,8 @@
-﻿if select(2, UnitClass("player")) ~= "MONK" then return end
+﻿-- Design Guidelines:
+-- Buffs to keep up are shown when missing, glow red when resources available
+-- Abilities to use on cooldown are shown when ready, glow green when resources available
+
+if select(2, UnitClass("player")) ~= "MONK" then return end
 
 local Monkey = CreateFrame("Frame", "MonkeyBusiness")
 Monkey:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -200,15 +204,17 @@ end
 
 --------------------------------------------------------------------------------
 -- Tiger Palm reminder icon
--- Shown if missing
+-- Shown if missing, glow always (no resource requirement)
 
 local TIGER_PALM_ID, TIGER_PALM_NAME = 100787, GetSpellInfo(100787)
+local TIGER_POWER_ID, TIGER_POWER_NAME = 125359, GetSpellInfo(125359)
 
 local TigerPalm = CreateIconButton(TIGER_PALM_ID, "TigerPalm")
 TigerPalm:SetPoint("TOPLEFT", Stagger, "BOTTOMLEFT", 0, -10 * (1 / 0.6))
 TigerPalm:SetScale(0.6)
 
 function TigerPalm:Activate()
+	self.SelectedHighlight:Show()
 	self:RegisterUnitEvent("UNIT_AURA", "player")
 	self:Update()
 end
@@ -219,7 +225,7 @@ function TigerPalm:Deactivate()
 end
 
 function TigerPalm:Update()
-	local _, _, _, _, _, buffDuration, buffExpires = UnitBuff("player", TIGER_PALM_NAME)
+	local _, _, _, _, _, buffDuration, buffExpires = UnitBuff("player", TIGER_POWER_NAME)
 	self:SetShown(not buffDuration)
 end
 
@@ -234,6 +240,7 @@ DeathNote:SetPoint("TOPLEFT", Stagger, "BOTTOMLEFT", 0, -10 * (1 / 0.6))
 DeathNote:SetScale(0.6)
 
 function DeathNote:Activate()
+	self.SelectedHighlight:SetVertexColor(1, 0, 0)
 	self:RegisterUnitEvent("UNIT_AURA", "player")
 	self:RegisterUnitEvent("UNIT_POWER", "player")
 	self:Update()
@@ -263,6 +270,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Shuffle icon
+-- Show if missing, 
 -- Red glow if missing, transparent if active, opaque under 10s remaining
 
 local SHUFFLE_ID, SHUFFLE_NAME = 115307, GetSpellInfo(115307)
@@ -275,35 +283,42 @@ function Shuffle:Activate()
 	self:RegisterUnitEvent("UNIT_AURA", "player")
 	self:RegisterUnitEvent("UNIT_POWER", "player")
 	self.SelectedHighlight:SetVertexColor(1, 0, 0)
-	self:Show()
 	self:Update()
 end
 
 function Shuffle:Deactivate()
-	self:Hide()
 	self:UnregisterEvent("UNIT_AURA")
 	self:UnregisterEvent("UNIT_POWER")
+	self:Hide()
 end
 
 function Shuffle:Update()
 	local _, _, _, _, _, buffDuration, buffExpires = UnitBuff("player", SHUFFLE_NAME)
-	if buffDuration and buffDuration < 12 then
+	if not buffDuration then
+		local chi = UnitPower("player", 12) -- SPELL_POWER_CHI
+		self:SetScript("OnUpdate", nil)
+		self.SelectedHighlight:SetShown(chi >= 2)
+		self.Count:SetText(nil)
+		self:SetAlpha(1)
+		self:Show()
+	elseif buffDuration > 12 then
+		self:Hide()
+		self:SetScript("OnUpdate", nil)
+		self.SelectedHighlight:Hide()
+		self.Count:SetText(nil)
+		self:SetAlpha(1)
+	else
 		self.SelectedHighlight:Hide()
 		self.expirationTime = buffExpires
 		self:SetScript("OnUpdate", self.OnUpdate)
-	else
-		local chi = UnitPower("player", 12) -- SPELL_POWER_CHI
-		self.SelectedHighlight:SetShown(not buffDuration and chi >= 2)
-		self:SetScript("OnUpdate", nil)
-		self.Count:SetText("")
-		self:SetAlpha(buffDuration and 0.1 or 1)
+		self:Show()
 	end
 end
 
 function Shuffle:OnUpdate(elapsed)
 	local t = self.expirationTime - GetTime()
 	self.Count:SetFormattedText("%.01f", t)
-	self:SetAlpha(1 - (t / 12))
+	self:SetAlpha(1 - (0.9 * (t / 12))) -- 10% at 12 sec, 100% at 0 sec
 end
 
 --------------------------------------------------------------------------------
