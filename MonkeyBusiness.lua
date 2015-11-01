@@ -1,6 +1,27 @@
-﻿-- Design Guidelines:
--- Buffs to keep up are shown when missing, glow red when resources available
--- Abilities to use on cooldown are shown when ready, glow green when resources available
+﻿--[[----------------------------------------------------------------------------
+	Monkey Business
+	Brewmaster buff and cooldown monitor
+	Copyright (c) 2015 Phanx <addons@phanx.net>. All rights reserved.
+	See the accompanying LICENSE.txt file for more information.
+	https://github.com/Phanx/MonkeyBusiness
+	http://www.curse.com/addons/wow/monkeybusiness
+	http://www.wowinterface.com/downloads/info
+--------------------------------------------------------------------------------
+	Design Guidelines
+	=================
+
+	Buffs to keep up:
+	- show when missing
+	- glow red when resources available
+
+	Self-healing abilities to use on cooldown:
+	- show when ready
+	- glow green when resources available
+
+	Other abilities to use on cooldown:
+	- show when ready
+	- glow yellow when resources available
+------------------------------------------------------------------------------]]
 
 if select(2, UnitClass("player")) ~= "MONK" then return end
 
@@ -101,7 +122,7 @@ local function IconButton_OnEnter(self)
 	GameTooltip:SetSpellByID(self.spell)
 end
 
-local function IconButton_OnEvent(self, event, ...)	
+local function IconButton_OnEvent(self, event, ...)
 	return (self[event] or self.Update)(self, event, ...)
 end
 
@@ -215,8 +236,10 @@ local TigerPalm = CreateIconButton(TIGER_PALM_ID, "TigerPalm")
 TigerPalm:SetPoint("TOPLEFT", Stagger, "BOTTOMLEFT", 0, -10 * (1 / 0.6))
 TigerPalm:SetScale(0.6)
 
+TigerPalm.SelectedHighlight:SetVertexColor(1, 0, 0)
+TigerPalm.SelectedHighlight:Show()
+
 function TigerPalm:Activate()
-	self.SelectedHighlight:Show()
 	self:RegisterUnitEvent("UNIT_AURA", "player")
 	self:Update()
 end
@@ -242,7 +265,6 @@ DeathNote:SetPoint("TOPLEFT", Stagger, "BOTTOMLEFT", 0, -10 * (1 / 0.6))
 DeathNote:SetScale(0.6)
 
 function DeathNote:Activate()
-	self.SelectedHighlight:SetVertexColor(1, 0, 0)
 	self:RegisterUnitEvent("UNIT_AURA", "player")
 	self:RegisterUnitEvent("UNIT_POWER", "player")
 	self:Update()
@@ -280,10 +302,11 @@ local Shuffle = CreateIconButton(SHUFFLE_ID, "Shuffle")
 Shuffle:SetPoint("BOTTOMRIGHT", Stagger, "TOPRIGHT", 0, 15 * (1 / 0.6))
 Shuffle:SetScale(0.6)
 
+Shuffle.SelectedHighlight:SetVertexColor(1, 0, 0)
+
 function Shuffle:Activate()
 	self:RegisterUnitEvent("UNIT_AURA", "player")
 	self:RegisterUnitEvent("UNIT_POWER", "player")
-	self.SelectedHighlight:SetVertexColor(1, 0, 0)
 	self:Update()
 end
 
@@ -332,11 +355,12 @@ local ExpelHarm = CreateIconButton(EXPEL_HARM_ID, "ExpelHarm")
 ExpelHarm:SetPoint("TOPRIGHT", Stagger, "BOTTOMRIGHT", 0, -10 * (1 / 0.6))
 ExpelHarm:SetScale(0.6)
 
+ExpelHarm.SelectedHighlight:SetVertexColor(0, 1, 0)
+
 function ExpelHarm:Activate()
 	self:RegisterUnitEvent("UNIT_HEALTH", "player")
 	self:RegisterUnitEvent("UNIT_POWER", "player")
 	self:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-	self.SelectedHighlight:SetVertexColor(0, 1, 0)
 	self:Update()
 end
 
@@ -369,9 +393,15 @@ local ChiWave = CreateIconButton(CHI_WAVE_ID, "ChiWave")
 ChiWave:SetPoint("TOPRIGHT", Stagger, "BOTTOMRIGHT", 0, -10 * (1 / 0.6))
 ChiWave:SetScale(0.6)
 
+ChiWave.SelectedHighlight:SetVertexColor(0, 1, 0)
+ChiWave.SelectedHighlight:Show()
+
+function ChiWave:PLAYER_TALENT_UPDATE()
+
+end
+
 function ChiWave:Activate()
 	self:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-	self.SelectedHighlight:SetVertexColor(0, 1, 0)
 	self:Update()
 end
 
@@ -381,7 +411,7 @@ function ChiWave:Deactivate()
 end
 
 function ChiWave:Update()
-	local start, duration = GetSpellCooldown(CHI_WAVE_ID)
+	local start, duration = GetSpellCooldown(self.spellID or CHI_WAVE_ID)
 	if start == 0 then
 		if ExpelHarm:IsShown() then
 			self:SetPoint("TOPRIGHT", ExpelHarm, "TOPLEFT", -10 * (1 / 0.6), 0)
