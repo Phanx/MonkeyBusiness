@@ -48,10 +48,11 @@ Stagger:UnregisterAllEvents()
 Stagger:SetScript("OnUpdate", nil)
 
 Stagger.Text = _G[Stagger:GetName().."Text"]
+Stagger.Bar  = _G[Stagger:GetName().."StatusBar"]
 
 Stagger.bg = Stagger:CreateTexture(nil, "BACKGROUND")
 Stagger.bg:SetAllPoints(true)
-Stagger.bg:SetTexture(Stagger:GetStatusBarTexture())
+Stagger.bg:SetTexture(Stagger.Bar:GetStatusBarTexture())
 
 function Stagger:Activate()
 	self:RegisterUnitEvent("UNIT_AURA", "player")
@@ -76,9 +77,9 @@ function Stagger:Update()
 	else
 		color = color[1] -- GREEN_INDEX
 	end
-	self:SetMinMaxValues(0, maxHealth)
-	self:SetValue(stagger)
-	self:SetStatusBarColor(color.r, color.g, color.b)
+	self.Bar:SetMinMaxValues(0, maxHealth)
+	self.Bar:SetValue(stagger)
+	self.Bar:SetStatusBarColor(color.r, color.g, color.b)
 	self.bg:SetVertexColor(color.r * 0.2, color.g * 0.2, color.b * 0.2)
 	self.Text:SetFormattedText("%d%%", floor(staggerPercent * 100 + 0.5))
 end
@@ -118,6 +119,7 @@ local function CreateIconButton(spell, name)
 	button.Icon:SetTexture(iconpath)
 
 	button.Count = button.Cooldown
+	button.Count:Show()
 
 	button.Cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
 	button.Cooldown:SetAllPoints(button.Icon)
@@ -270,8 +272,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Shuffle icon
--- Show if missing, 
--- Red glow if missing, transparent if active, opaque under 10s remaining
+-- Show if missing, glow if resources available, show transparent under 12s
 
 local SHUFFLE_ID, SHUFFLE_NAME = 115307, GetSpellInfo(115307)
 
@@ -323,7 +324,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Expel Harm icon
--- Shown if available
+-- Show if off cooldown, glow if resources available
 
 local EXPEL_HARM_ID, EXPEL_HARM_NAME = 115072, GetSpellInfo(115072)
 
@@ -360,7 +361,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Chi Wave icon
--- Shown if available
+-- Show if off cooldown, glow always (no resource requirement)
 
 local CHI_WAVE_ID, CHI_WAVE_NAME = 115098, GetSpellInfo(115098)
 
