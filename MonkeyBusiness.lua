@@ -40,7 +40,10 @@ Stagger:SetScript("OnDragStop", Stagger.StopMovingOrSizing)
 Stagger:SetScript("OnHide", Stagger.StopMovingOrSizing)
 tinsert(Monkey.Business, Stagger)
 
-Stagger.Text = MonkeyBusinessStaggerText
+Stagger:UnregisterAllEvents()
+Stagger:SetScript("OnUpdate", nil)
+
+Stagger.Text = _G[Stagger:GetName().."Text"]
 
 Stagger.bg = Stagger:CreateTexture(nil, "BACKGROUND")
 Stagger.bg:SetAllPoints(true)
@@ -48,8 +51,8 @@ Stagger.bg:SetTexture(Stagger:GetStatusBarTexture())
 
 function Stagger:Activate()
 	self:RegisterUnitEvent("UNIT_AURA", "player")
-	self:Update()
 	self:Show()
+	self:Update()
 end
 
 function Stagger:Deactivate()
@@ -76,6 +79,8 @@ function Stagger:Update()
 	self.Text:SetFormattedText("%d%%", floor(staggerPercent * 100 + 0.5))
 end
 
+Stagger:SetScript("OnEvent", Stagger.Update)
+
 --------------------------------------------------------------------------------
 -- Icon utilities
 
@@ -91,6 +96,10 @@ local function IconButton_OnEnter(self)
 	GameTooltip:SetSpellByID(self.spell)
 end
 
+local function IconButton_OnEvent(self, event, ...)	
+	return (self[event] or self.Update)(self, event, ...)
+end
+
 local function CreateIconButton(spell, name)
 	assert(type(spell) == "number", "CreateIcon: spell must be a number")
 	local sname, _, iconpath = GetSpellInfo(spell)
@@ -100,7 +109,7 @@ local function CreateIconButton(spell, name)
 
 	local button = CreateFrame("Button", "MonkeyBusiness"..name, Stagger, "PetBattleActionButtonTemplate") -- 52x52
 	-- regions: Icon, CooldownShadow, CooldownFlash, Cooldown, HotKey, SelectedHighlight, Lock, BetterIcon
-	button:SetScript("OnEvent", nil)
+	button:SetScript("OnEvent", IconButton_OnEvent)
 
 	button.Icon:SetTexture(iconpath)
 
@@ -110,6 +119,7 @@ local function CreateIconButton(spell, name)
 	button.Cooldown:SetAllPoints(button.Icon)
 	button.Cooldown:SetEdgeTexture("Interface\\Cooldown\\edge")
 	button.Cooldown:SetSwipeTexture(0, 0, 0)
+	button.Cooldown.noCooldownCount = true
 
 	button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	button.Text:SetPoint("LEFT", 4, 0)
@@ -135,6 +145,7 @@ function Guard:Activate()
 	self:RegisterUnitEvent("UNIT_AURA", "player")
 	self:RegisterUnitEvent("UNIT_POWER", "player")
 	self:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+	self:Show()
 	self:Update()
 end
 
@@ -177,7 +188,7 @@ function Guard:Update()
 	end
 end
 
-function Guard:OnUpdate(self, elapsed)
+function Guard:OnUpdate(elapsed)
 	if self.state == "ACTIVE" then
 		local t = self.endTime - GetTime()
 		self.Count:SetFormattedText("%.01f", t)
@@ -209,7 +220,7 @@ end
 
 function TigerPalm:Update()
 	local _, _, _, _, _, buffDuration, buffExpires = UnitBuff("player", TIGER_PALM_NAME)
-	self:SetShown(buffDuration)
+	self:SetShown(not buffDuration)
 end
 
 --------------------------------------------------------------------------------
@@ -240,7 +251,7 @@ function DeathNote:Update()
 		self:Hide()
 	else
 		local chi = UnitPower("player", 12) -- SPELL_POWER_CHI
-		self.SelectedHighlight:SetShown(chi >= 2)
+		self.SelectedHighlight:SetShown(chi >= 3)
 		self:Show()
 		if TigerPalm:IsShown() then
 			self:SetPoint("TOPLEFT", TigerPalm, "TOPRIGHT", -4 * (1 / 0.6), 0)
@@ -257,11 +268,12 @@ end
 local SHUFFLE_ID, SHUFFLE_NAME = 115307, GetSpellInfo(115307)
 
 local Shuffle = CreateIconButton(SHUFFLE_ID, "Shuffle")
-Shuffle:SetPoint("BOTTOMLEFT", Stagger, "TOPLEFT", 0, -4 * (1 / 0.6))
+Shuffle:SetPoint("BOTTOMRIGHT", Stagger, "TOPRIGHT", 0, 15 * (1 / 0.6))
 Shuffle:SetScale(0.6)
 
 function Shuffle:Activate()
 	self:RegisterUnitEvent("UNIT_AURA", "player")
+	self:RegisterUnitEvent("UNIT_POWER", "player")
 	self.SelectedHighlight:SetVertexColor(1, 0, 0)
 	self:Show()
 	self:Update()
@@ -270,24 +282,98 @@ end
 function Shuffle:Deactivate()
 	self:Hide()
 	self:UnregisterEvent("UNIT_AURA")
+	self:UnregisterEvent("UNIT_POWER")
 end
 
 function Shuffle:Update()
 	local _, _, _, _, _, buffDuration, buffExpires = UnitBuff("player", SHUFFLE_NAME)
-	if buffDuration and buffDuration < 10 then
+	if buffDuration and buffDuration < 12 then
 		self.SelectedHighlight:Hide()
 		self.expirationTime = buffExpires
 		self:SetScript("OnUpdate", self.OnUpdate)
 	else
-		self.SelectedHighlight:SetShown(not buffDuration)
+		local chi = UnitPower("player", 12) -- SPELL_POWER_CHI
+		self.SelectedHighlight:SetShown(not buffDuration and chi >= 2)
 		self:SetScript("OnUpdate", nil)
 		self.Count:SetText("")
-		self.Icon:SetAlpha(buffDuration and 0.25 or 1)
+		self:SetAlpha(buffDuration and 0.1 or 1)
 	end
 end
 
 function Shuffle:OnUpdate(elapsed)
 	local t = self.expirationTime - GetTime()
 	self.Count:SetFormattedText("%.01f", t)
-	self.Icon:SetAlpha(1 - (t / 10))
+	self:SetAlpha(1 - (t / 12))
+end
+
+--------------------------------------------------------------------------------
+-- Expel Harm icon
+-- Shown if available
+
+local EXPEL_HARM_ID, EXPEL_HARM_NAME = 115072, GetSpellInfo(115072)
+
+local ExpelHarm = CreateIconButton(EXPEL_HARM_ID, "ExpelHarm")
+ExpelHarm:SetPoint("TOPRIGHT", Stagger, "BOTTOMRIGHT", 0, -10 * (1 / 0.6))
+ExpelHarm:SetScale(0.6)
+
+function ExpelHarm:Activate()
+	self:RegisterUnitEvent("UNIT_HEALTH", "player")
+	self:RegisterUnitEvent("UNIT_POWER", "player")
+	self:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+	self.SelectedHighlight:SetVertexColor(0, 1, 0)
+	self:Update()
+end
+
+function ExpelHarm:Deactivate()
+	self:Hide()
+	self:UnregisterEvent("UNIT_HEALTH")
+	self:UnregisterEvent("UNIT_POWER")
+	self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+end
+
+function ExpelHarm:Update()
+	local start, duration = GetSpellCooldown(EXPEL_HARM_ID)
+	local health, healthMax = UnitHealth("player"), UnitHealthMax("player")
+	if start == 0 and health < healthMax then
+		local energy = UnitPower("player", 3) -- SPELL_POWER_ENERGY
+		self.SelectedHighlight:SetShown(energy >= 40)
+		self:Show()
+	else
+		self:Hide()
+	end
+end
+
+--------------------------------------------------------------------------------
+-- Chi Wave icon
+-- Shown if available
+
+local CHI_WAVE_ID, CHI_WAVE_NAME = 115098, GetSpellInfo(115098)
+
+local ChiWave = CreateIconButton(CHI_WAVE_ID, "ChiWave")
+ChiWave:SetPoint("TOPRIGHT", Stagger, "BOTTOMRIGHT", 0, -10 * (1 / 0.6))
+ChiWave:SetScale(0.6)
+
+function ChiWave:Activate()
+	self:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+	self.SelectedHighlight:SetVertexColor(0, 1, 0)
+	self:Update()
+end
+
+function ChiWave:Deactivate()
+	self:Hide()
+	self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+end
+
+function ChiWave:Update()
+	local start, duration = GetSpellCooldown(CHI_WAVE_ID)
+	if start == 0 then
+		if ExpelHarm:IsShown() then
+			self:SetPoint("TOPRIGHT", ExpelHarm, "TOPLEFT", -10 * (1 / 0.6), 0)
+		else
+			self:SetPoint("TOPRIGHT", Stagger, "BOTTOMRIGHT", 0, -10 * (1 / 0.6))
+		end
+		self:Show()
+	else
+		self:Hide()
+	end
 end
